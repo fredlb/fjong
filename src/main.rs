@@ -35,6 +35,7 @@ const FOREGROUND_COLOR: Color = Color::WHITE;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .init_resource::<Thingies>()
         .insert_resource(Scoreboard {
             p1_score: 0,
             p2_score: 0,
@@ -142,7 +143,13 @@ struct Scoreboard {
     fjongs: usize,
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+#[derive(Default)]
+struct Thingies {
+    score_cooldown: Timer,
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: ResMut<Thingies>) {
+    thingies.score_cooldown = Timer::from_seconds(0.5, false);
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
@@ -355,10 +362,16 @@ fn move_p2_paddle(
     paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
 }
 
-fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>) {
-    for (mut transform, velocity) in query.iter_mut() {
-        transform.translation.x += velocity.x * TIME_STEP;
-        transform.translation.y += velocity.y * TIME_STEP;
+fn apply_velocity(
+    mut thingies: ResMut<Thingies>,
+    mut query: Query<(&mut Transform, &Velocity)>,
+    time: Res<Time>,
+) {
+    if thingies.score_cooldown.tick(time.delta()).finished() {
+        for (mut transform, velocity) in query.iter_mut() {
+            transform.translation.x += velocity.x * TIME_STEP;
+            transform.translation.y += velocity.y * TIME_STEP;
+        }
     }
 }
 
@@ -381,6 +394,7 @@ fn update_p2_scoreboard(
 fn check_for_collisions(
     mut commands: Commands,
     mut scoreboard: ResMut<Scoreboard>,
+    mut thingies: ResMut<Thingies>,
     mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
     collider_query: Query<
         (
@@ -399,7 +413,15 @@ fn check_for_collisions(
     let ball_size = ball_transform.scale.truncate();
 
     // wall collision
-    for (collider_entity, transform, maybe_p1_goal, maybe_p2_goal, maybe_p1_paddle, maybe_p2_paddle) in collider_query.iter() {
+    for (
+        collider_entity,
+        transform,
+        maybe_p1_goal,
+        maybe_p2_goal,
+        maybe_p1_paddle,
+        maybe_p2_paddle,
+    ) in collider_query.iter()
+    {
         let collision = collide(
             ball_transform.translation,
             ball_size,
@@ -434,6 +456,7 @@ fn check_for_collisions(
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
                 ball_transform.translation.z = BALL_STARTING_POSITION.z;
+                thingies.score_cooldown.reset();
             }
 
             if maybe_p2_goal.is_some() {
@@ -441,6 +464,7 @@ fn check_for_collisions(
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
                 ball_transform.translation.z = BALL_STARTING_POSITION.z;
+                thingies.score_cooldown.reset();
             }
 
             if maybe_p1_paddle.is_some() {
@@ -473,7 +497,6 @@ fn check_for_collisions(
                     ball_velocity.y = -200.0;
                 }
             }
-            
         }
     }
 }
