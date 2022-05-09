@@ -28,8 +28,8 @@ const RIGHT_WALL: f32 = 450.;
 const BOTTOM_WALL: f32 = -300.;
 const TOP_WALL: f32 = 300.;
 
-const SCOREBOARD_FONT_SIZE: f32 = 40.0;
-const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
+const SCOREBOARD_FONT_SIZE: f32 = 32.0;
+const SCOREBOARD_TEXT_PADDING: Val = Val::Px(15.0);
 
 const BACKGROUND_COLOR: Color = Color::BLACK;
 const FOREGROUND_COLOR: Color = Color::WHITE;
@@ -211,7 +211,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
             },
             ..default()
         })
-        .insert(Velocity(INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED));
+        .insert(Velocity(const_vec2!([
+            INITIAL_BALL_DIRECTION.normalize().x * BALL_SPEED_X,
+            INITIAL_BALL_DIRECTION.normalize().y * BALL_SPEED_Y,
+        ])));
 
     commands.spawn_bundle(WallBundle::new(WallLocation::Bottom));
     commands.spawn_bundle(WallBundle::new(WallLocation::Top));
@@ -255,9 +258,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
             text: Text {
                 sections: vec![
                     TextSection {
-                        value: "P1 score: ".to_string(),
+                        value: "P1: ".to_string(),
                         style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font: asset_server.load("fonts/PressStart2P-Regular.ttf"),
                             font_size: SCOREBOARD_FONT_SIZE,
                             color: FOREGROUND_COLOR,
                         },
@@ -265,7 +268,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
                     TextSection {
                         value: "".to_string(),
                         style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font: asset_server.load("fonts/PressStart2P-Regular.ttf"),
                             font_size: SCOREBOARD_FONT_SIZE,
                             color: FOREGROUND_COLOR,
                         },
@@ -291,9 +294,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
             text: Text {
                 sections: vec![
                     TextSection {
-                        value: "P2 score: ".to_string(),
+                        value: "P2: ".to_string(),
                         style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font: asset_server.load("fonts/PressStart2P-Regular.ttf"),
                             font_size: SCOREBOARD_FONT_SIZE,
                             color: FOREGROUND_COLOR,
                         },
@@ -301,7 +304,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
                     TextSection {
                         value: "".to_string(),
                         style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font: asset_server.load("fonts/PressStart2P-Regular.ttf"),
                             font_size: SCOREBOARD_FONT_SIZE,
                             color: FOREGROUND_COLOR,
                         },
@@ -445,7 +448,6 @@ fn check_for_collisions(
                 Collision::Inside => { /* do nothing */ }
             }
 
-
             if reflect_x {
                 ball_velocity.x = -ball_velocity.x;
             }
@@ -484,15 +486,19 @@ fn check_for_collisions(
             }
 
             if ball_velocity.x > 0.0 {
-                ball_velocity.x = (BALL_SPEED_X * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_X, 1000.0);
+                ball_velocity.x =
+                    (BALL_SPEED_X * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_X, 1000.0);
             } else {
-                ball_velocity.x = ((-BALL_SPEED_X) * (scoreboard.fjongs as f32) / 4.0).clamp(-1000.0, -BALL_SPEED_X);
+                ball_velocity.x = ((-BALL_SPEED_X) * (scoreboard.fjongs as f32) / 4.0)
+                    .clamp(-1000.0, -BALL_SPEED_X);
             }
 
             if ball_velocity.y > 0.0 {
-                ball_velocity.y = (BALL_SPEED_Y * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_Y, 200.0);
+                ball_velocity.y =
+                    (BALL_SPEED_Y * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_Y, 200.0);
             } else {
-                ball_velocity.y = ((-BALL_SPEED_Y) * (scoreboard.fjongs as f32) / 4.0).clamp(-200.0, -BALL_SPEED_Y);
+                ball_velocity.y = ((-BALL_SPEED_Y) * (scoreboard.fjongs as f32) / 4.0)
+                    .clamp(-200.0, -BALL_SPEED_Y);
             }
         }
     }
