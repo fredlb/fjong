@@ -16,6 +16,8 @@ const PADDLE_SPEED: f32 = 500.0;
 const BALL_STARTING_POSITION: Vec3 = const_vec3!([0.0, 0.0, 1.0]);
 const BALL_SIZE: Vec3 = const_vec3!([30.0, 30.0, 0.0]);
 const BALL_SPEED: f32 = 400.0;
+const BALL_SPEED_X: f32 = 400.0;
+const BALL_SPEED_Y: f32 = 50.0;
 const INITIAL_BALL_DIRECTION: Vec2 = const_vec2!([-0.5, 0.1]);
 
 const WALL_THICKNESS: f32 = 10.0;
@@ -149,7 +151,7 @@ struct Thingies {
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: ResMut<Thingies>) {
-    thingies.score_cooldown = Timer::from_seconds(0.5, false);
+    thingies.score_cooldown = Timer::from_seconds(0.7, false);
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
@@ -443,6 +445,7 @@ fn check_for_collisions(
                 Collision::Inside => { /* do nothing */ }
             }
 
+
             if reflect_x {
                 ball_velocity.x = -ball_velocity.x;
             }
@@ -451,7 +454,9 @@ fn check_for_collisions(
             }
 
             if maybe_p1_goal.is_some() {
-                // increase p2 score, reset ball and serve
+                if scoreboard.fjongs >= 5 {
+                    scoreboard.fjongs = 2;
+                }
                 scoreboard.p2_score += 1;
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
@@ -460,6 +465,9 @@ fn check_for_collisions(
             }
 
             if maybe_p2_goal.is_some() {
+                if scoreboard.fjongs >= 5 {
+                    scoreboard.fjongs = 2;
+                }
                 scoreboard.p1_score += 1;
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
@@ -474,28 +482,17 @@ fn check_for_collisions(
             if maybe_p2_paddle.is_some() {
                 scoreboard.fjongs += 1;
             }
+
             if ball_velocity.x > 0.0 {
-                ball_velocity.x += (scoreboard.fjongs as f32) * 1.5;
-                if ball_velocity.x >= 1000.0 {
-                    ball_velocity.x = 1000.0;
-                }
+                ball_velocity.x = (BALL_SPEED_X * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_X, 1000.0);
             } else {
-                ball_velocity.x -= (scoreboard.fjongs as f32) * 1.5;
-                if ball_velocity.x <= -1000.0 {
-                    ball_velocity.x = -1000.0;
-                }
+                ball_velocity.x = ((-BALL_SPEED_X) * (scoreboard.fjongs as f32) / 4.0).clamp(-1000.0, -BALL_SPEED_X);
             }
 
             if ball_velocity.y > 0.0 {
-                ball_velocity.y += (scoreboard.fjongs as f32) * 1.5;
-                if ball_velocity.y >= 200.0 {
-                    ball_velocity.y = 200.0;
-                }
+                ball_velocity.y = (BALL_SPEED_Y * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_Y, 200.0);
             } else {
-                ball_velocity.y -= (scoreboard.fjongs as f32) * 1.5;
-                if ball_velocity.y <= -200.0 {
-                    ball_velocity.y = -200.0;
-                }
+                ball_velocity.y = ((-BALL_SPEED_Y) * (scoreboard.fjongs as f32) / 4.0).clamp(-200.0, -BALL_SPEED_Y);
             }
         }
     }
