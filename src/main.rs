@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     sprite::collide_aabb::{collide, Collision},
 };
-use bevy_rapier2d::prelude::*;
+use bevy_rapier2d::{prelude::*, rapier::prelude::CollisionEventFlags};
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 
@@ -62,7 +62,8 @@ fn main() {
         // .add_system(update_p2_scoreboard)
         // .add_system(print_ball_altitude)
         .add_system(goal_check)
-        .add_system(paddle_check)
+        // .add_system(paddle_check)
+        // .add_system(display_intersection_info)
         .run();
 }
 
@@ -87,64 +88,6 @@ struct P1GoalText;
 #[derive(Component)]
 struct P2GoalText;
 
-// #[derive(Component, Deref, DerefMut)]
-// struct Velocity(Vec2);
-
-// #[derive(Component)]
-// struct Collider;
-
-// #[derive(Default)]
-// struct CollisionEvent;
-
-// #[derive(Bundle)]
-// struct WallBundle {
-//     #[bundle]
-//     sprite_bundle: SpriteBundle,
-//     collider: Collider,
-// }
-
-// enum WallLocation {
-//     Bottom,
-//     Top,
-// }
-
-// impl WallLocation {
-//     fn position(&self) -> Vec2 {
-//         match self {
-//             WallLocation::Bottom => Vec2::new(0.0, BOTTOM_WALL),
-//             WallLocation::Top => Vec2::new(0.0, TOP_WALL),
-//         }
-//     }
-
-//     fn size(&self) -> Vec2 {
-//         let arena_width = RIGHT_WALL - LEFT_WALL;
-
-//         match self {
-//             WallLocation::Bottom => Vec2::new(arena_width + WALL_THICKNESS, WALL_THICKNESS),
-//             WallLocation::Top => Vec2::new(arena_width + WALL_THICKNESS, WALL_THICKNESS),
-//         }
-//     }
-// }
-
-// impl WallBundle {
-//     fn new(location: WallLocation) -> WallBundle {
-//         WallBundle {
-//             sprite_bundle: SpriteBundle {
-//                 transform: Transform {
-//                     translation: location.position().extend(0.0),
-//                     scale: location.size().extend(1.0),
-//                     ..default()
-//                 },
-//                 sprite: Sprite {
-//                     color: FOREGROUND_COLOR,
-//                     ..default()
-//                 },
-//                 ..default()
-//             },
-//             collider: Collider,
-//         }
-//     }
-// }
 
 struct Scoreboard {
     p1_score: usize,
@@ -190,14 +133,16 @@ fn setup_physics(mut commands: Commands) {
         .insert(Collider::cuboid(10.0, 500.0))
         .insert(Transform::from_xyz(500.0, 0.0, 0.0))
         .insert(Sensor(true))
-        .insert(ActiveEvents::COLLISION_EVENTS);
+        .insert(ActiveEvents::COLLISION_EVENTS)
+        .insert(P2Goal);
 
     commands
         .spawn()
         .insert(Collider::cuboid(10.0, 500.0))
         .insert(Transform::from_xyz(-500.0, 0.0, 0.0))
         .insert(Sensor(true))
-        .insert(ActiveEvents::COLLISION_EVENTS);
+        .insert(ActiveEvents::COLLISION_EVENTS)
+        .insert(P1Goal);
 
     /* Create the bouncing ball. */
     commands
@@ -210,7 +155,8 @@ fn setup_physics(mut commands: Commands) {
             linvel: Vec2::new(500.0, 2.0),
             angvel: 0.2,
         })
-        .insert(GravityScale(5.0));
+        .insert(GravityScale(5.0))
+        .insert(Ball);
 }
 
 fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
@@ -219,9 +165,28 @@ fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
     }
 }
 
-fn goal_check(mut collision_events: EventReader<CollisionEvent>, mut sensors: Query<&mut Sensor>) {
+fn goal_check(mut collision_events: EventReader<CollisionEvent>) {
     for event in collision_events.iter() {
-        println!("goal event: {:?}", event);
+        match event {
+            CollisionEvent::Started(ent, a, b) => {
+                match b {
+                    &CollisionEventFlags::SENSOR => println!("GOAL {:?} {:?}", ent, a),
+                    _ => (),
+                }
+            },
+            _ => (),
+        }
+    }
+}
+
+fn display_intersection_info(rapier_context: Res<RapierContext>, query: Query<(Entity, &Ball)>, q2: Query<(Entity, &P1Goal)>) {
+    let (entity1, _) = query.single();
+    let (entity2, _) = q2.single();
+
+    
+    /* Find the intersection pair, if it exists, between two colliders. */
+    if rapier_context.intersection_pair(entity1, entity2) == Some(true) {
+        println!("The entities {:?} and {:?} have intersecting colliders!", entity1, entity2);
     }
 }
 
@@ -236,12 +201,7 @@ fn goal_check(mut collision_events: EventReader<CollisionEvent>, mut sensors: Qu
 //        ),
 //        (With<Collider>, Without<Ball>),
 //    >,
-fn paddle_check(
-    mut collision_events: EventReader<CollisionEvent>,
-    mut sensor_query: Query<(Entity), With<Sensor>>,
-) {
-    for sensor in sensor_query.iter() {
-    }
+fn paddle_check(mut collision_events: EventReader<CollisionEvent>) {
     for event in collision_events.iter() {
         println!("paddle event: {:?}", event);
     }
