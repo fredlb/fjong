@@ -1,6 +1,7 @@
 use bevy::{
     core::FixedTimestep,
     math::{const_vec2, const_vec3},
+    input::gamepad::{GamepadEvent, GamepadEventType},
     prelude::*,
     sprite::collide_aabb::{collide, Collision},
 };
@@ -45,6 +46,7 @@ fn main() {
         })
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_startup_system(setup)
+        .add_system(gamepad_connections)
         .add_event::<CollisionEvent>()
         .add_system_set(
             SystemSet::new()
@@ -327,24 +329,88 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
         .insert(P2GoalText);
 }
 
-fn move_p1_paddle(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Transform, With<P1Paddle>>,
+fn gamepad_events(mut gamepad_event: EventReader<GamepadEvent>) {
+    for event in gamepad_event.iter() {
+        match &event {
+            GamepadEvent(gamepad, GamepadEventType::Connected) => {
+                info!("{:?} Connected", gamepad);
+            }
+            GamepadEvent(gamepad, GamepadEventType::Disconnected) => {
+                info!("{:?} Disconnected", gamepad);
+            }
+            GamepadEvent(gamepad, GamepadEventType::ButtonChanged(button_type, value)) => {
+                info!("{:?} of {:?} is changed to {}", button_type, gamepad, value);
+            }
+            GamepadEvent(gamepad, GamepadEventType::AxisChanged(axis_type, value)) => {
+                info!("{:?} of {:?} is changed to {}", axis_type, gamepad, value);
+            }
+        }
+    }
+}
+
+/// Simple resource to store the ID of the connected gamepad.
+/// We need to know which gamepad to use for player input.
+struct MyGamepad(Gamepad);
+
+fn gamepad_connections(
+    mut commands: Commands,
+    my_gamepad: Option<Res<MyGamepad>>,
+    mut gamepad_evr: EventReader<GamepadEvent>,
 ) {
+    for GamepadEvent(id, kind) in gamepad_evr.iter() {
+        match kind {
+            GamepadEventType::Connected => {
+                println!("New gamepad connected with ID: {:?}", id);
+
+                // if we don't have any gamepad yet, use this one
+                if my_gamepad.is_none() {
+                    commands.insert_resource(MyGamepad(*id));
+                }
+            }
+            GamepadEventType::Disconnected => {
+                println!("Lost gamepad connection with ID: {:?}", id);
+
+                // if it's the one we previously associated with the player,
+                // disassociate it:
+                if let Some(MyGamepad(old_id)) = my_gamepad.as_deref() {
+                    if old_id == id {
+                        commands.remove_resource::<MyGamepad>();
+                    }
+                }
+            }
+            // other events are irrelevant
+            _ => {}
+        }
+    }
+}
+
+fn move_p1_paddle(
+    mut query: Query<&mut Transform, With<P1Paddle>>,
+    axes: Res<Axis<GamepadAxis>>,
+    my_gamepad: Option<Res<MyGamepad>>,
+) {
+    let gamepad = if let Some(gp) = my_gamepad {
+        // a gamepad is connected, we have the id
+        gp.0
+    } else {
+        // no gamepad is connected
+        return;
+    };
+
+    // The joysticks are represented using a separate axis for X and Y
+
+    let axis_lx = GamepadAxis(gamepad, GamepadAxisType::LeftStickX);
+    let axis_ly = GamepadAxis(gamepad, GamepadAxisType::LeftStickY);
     let mut paddle_transform = query.single_mut();
-    let mut direction = 0.0;
-    if keyboard_input.pressed(KeyCode::A) {
-        direction -= 1.0;
-    }
-    if keyboard_input.pressed(KeyCode::Q) {
-        direction += 1.0;
+
+    if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
+        let new_paddle_position = y * 250.0;
+        let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+        let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
+
+        paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
     }
 
-    let new_paddle_position = paddle_transform.translation.y + direction * PADDLE_SPEED * TIME_STEP;
-    let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
-    let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
-
-    paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
 }
 
 fn move_p2_paddle(
