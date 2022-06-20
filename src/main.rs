@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{
     core::FixedTimestep,
     math::{const_vec2, const_vec3},
@@ -329,25 +331,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
         .insert(P2GoalText);
 }
 
-fn gamepad_events(mut gamepad_event: EventReader<GamepadEvent>) {
-    for event in gamepad_event.iter() {
-        match &event {
-            GamepadEvent(gamepad, GamepadEventType::Connected) => {
-                info!("{:?} Connected", gamepad);
-            }
-            GamepadEvent(gamepad, GamepadEventType::Disconnected) => {
-                info!("{:?} Disconnected", gamepad);
-            }
-            GamepadEvent(gamepad, GamepadEventType::ButtonChanged(button_type, value)) => {
-                info!("{:?} of {:?} is changed to {}", button_type, gamepad, value);
-            }
-            GamepadEvent(gamepad, GamepadEventType::AxisChanged(axis_type, value)) => {
-                info!("{:?} of {:?} is changed to {}", axis_type, gamepad, value);
-            }
-        }
-    }
-}
-
 /// Simple resource to store the ID of the connected gamepad.
 /// We need to know which gamepad to use for player input.
 struct MyGamepad(Gamepad);
@@ -385,31 +368,45 @@ fn gamepad_connections(
 }
 
 fn move_p1_paddle(
+    keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&mut Transform, With<P1Paddle>>,
     axes: Res<Axis<GamepadAxis>>,
     my_gamepad: Option<Res<MyGamepad>>,
 ) {
-    let gamepad = if let Some(gp) = my_gamepad {
+    // let gamepad = if let Some(gp) = my_gamepad {
         // a gamepad is connected, we have the id
-        gp.0
-    } else {
+        // gp.0
+    // } else {
         // no gamepad is connected
-        return;
-    };
+        // return;
+    // };
 
     // The joysticks are represented using a separate axis for X and Y
 
-    let axis_lx = GamepadAxis(gamepad, GamepadAxisType::LeftStickX);
-    let axis_ly = GamepadAxis(gamepad, GamepadAxisType::LeftStickY);
+    // let axis_ly = GamepadAxis(gamepad, GamepadAxisType::LeftStickY);
+    // let mut paddle_transform = query.single_mut();
+
+    // if let Some(y) = axes.get(axis_ly) {
+    //     let new_paddle_position = y * 250.0;
+    //     let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+    //     let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
+
+    //     paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+    // }
     let mut paddle_transform = query.single_mut();
-
-    if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
-        let new_paddle_position = y * 250.0;
-        let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
-        let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
-
-        paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+    let mut direction = 0.0;
+    if keyboard_input.pressed(KeyCode::S) {
+        direction -= 1.0;
     }
+    if keyboard_input.pressed(KeyCode::W) {
+        direction += 1.0;
+    }
+
+    let new_paddle_position = paddle_transform.translation.y + direction * PADDLE_SPEED * TIME_STEP;
+    let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+    let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
+
+    paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
 
 }
 
@@ -529,6 +526,8 @@ fn check_for_collisions(
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
                 ball_transform.translation.z = BALL_STARTING_POSITION.z;
+                ball_velocity.x = BALL_SPEED_X;
+                ball_velocity.y = BALL_SPEED_Y;
                 thingies.score_cooldown.reset();
             }
 
@@ -540,31 +539,46 @@ fn check_for_collisions(
                 ball_transform.translation.x = BALL_STARTING_POSITION.x;
                 ball_transform.translation.y = BALL_STARTING_POSITION.y;
                 ball_transform.translation.z = BALL_STARTING_POSITION.z;
+                ball_velocity.x = BALL_SPEED_X;
+                ball_velocity.y = BALL_SPEED_Y;
                 thingies.score_cooldown.reset();
             }
 
             if maybe_p1_paddle.is_some() {
+                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
+                let normalized_relative_intersection_y = relative_intersect_y/60.0;
+                let bounce_angle = normalized_relative_intersection_y * ((75.0*PI)/12.0).to_radians();
+
+                ball_velocity.y = BALL_SPEED * (-bounce_angle.sin());
+                ball_velocity.x = BALL_SPEED * bounce_angle.cos();
                 scoreboard.fjongs += 1;
             }
 
             if maybe_p2_paddle.is_some() {
+                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
+                let normalized_relative_intersection_y = relative_intersect_y/60.0;
+                let bounce_angle = normalized_relative_intersection_y * ((75.0*PI)/12.0).to_radians();
+
+                ball_velocity.y = BALL_SPEED * (-bounce_angle.sin());
+                ball_velocity.x = -(BALL_SPEED * bounce_angle.cos());
                 scoreboard.fjongs += 1;
             }
 
+
             if ball_velocity.x > 0.0 {
                 ball_velocity.x =
-                    (BALL_SPEED_X * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_X, 1000.0);
+                    (ball_velocity.x * (scoreboard.fjongs as f32) / 4.0).clamp(ball_velocity.x, 1000.0);
             } else {
-                ball_velocity.x = ((-BALL_SPEED_X) * (scoreboard.fjongs as f32) / 4.0)
-                    .clamp(-1000.0, -BALL_SPEED_X);
+                ball_velocity.x = ((ball_velocity.x) * (scoreboard.fjongs as f32) / 4.0)
+                    .clamp(-1000.0, ball_velocity.x);
             }
 
             if ball_velocity.y > 0.0 {
                 ball_velocity.y =
-                    (BALL_SPEED_Y * (scoreboard.fjongs as f32) / 4.0).clamp(BALL_SPEED_Y, 200.0);
+                    (ball_velocity.y * (scoreboard.fjongs as f32) / 4.0).clamp(ball_velocity.y, 200.0);
             } else {
-                ball_velocity.y = ((-BALL_SPEED_Y) * (scoreboard.fjongs as f32) / 4.0)
-                    .clamp(-200.0, -BALL_SPEED_Y);
+                ball_velocity.y = ((ball_velocity.y) * (scoreboard.fjongs as f32) / 4.0)
+                    .clamp(-200.0, ball_velocity.y);
             }
         }
     }
