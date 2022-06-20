@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use rand::Rng;
 
 use bevy::{
     core::FixedTimestep,
@@ -54,8 +55,8 @@ fn main() {
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                 .with_system(check_for_collisions)
+                .with_system(ai2.before(check_for_collisions))
                 .with_system(move_p1_paddle.before(check_for_collisions))
-                .with_system(move_p2_paddle.before(check_for_collisions))
                 .with_system(apply_velocity.before(check_for_collisions)),
         )
         .add_system(update_p1_scoreboard)
@@ -197,6 +198,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut thingies: R
             },
             ..default()
         })
+        .insert(Velocity(const_vec2!([0.0, 0.0])))
         .insert(Collider);
 
     // Ball
@@ -373,40 +375,33 @@ fn move_p1_paddle(
     axes: Res<Axis<GamepadAxis>>,
     my_gamepad: Option<Res<MyGamepad>>,
 ) {
-    // let gamepad = if let Some(gp) = my_gamepad {
-        // a gamepad is connected, we have the id
-        // gp.0
-    // } else {
-        // no gamepad is connected
-        // return;
-    // };
+    if let Some(gp) = my_gamepad {
+        let axis_ly = GamepadAxis(gp.0, GamepadAxisType::LeftStickY);
+        let mut paddle_transform = query.single_mut();
 
-    // The joysticks are represented using a separate axis for X and Y
+        if let Some(y) = axes.get(axis_ly) {
+            let new_paddle_position = y * 250.0;
+            let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+            let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
 
-    // let axis_ly = GamepadAxis(gamepad, GamepadAxisType::LeftStickY);
-    // let mut paddle_transform = query.single_mut();
+            paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+        }
+    } else {
+        let mut paddle_transform = query.single_mut();
+        let mut direction = 0.0;
+        if keyboard_input.pressed(KeyCode::S) {
+            direction -= 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::W) {
+            direction += 1.0;
+        }
 
-    // if let Some(y) = axes.get(axis_ly) {
-    //     let new_paddle_position = y * 250.0;
-    //     let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
-    //     let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
+        let new_paddle_position = paddle_transform.translation.y + direction * PADDLE_SPEED * TIME_STEP;
+        let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+        let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
 
-    //     paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
-    // }
-    let mut paddle_transform = query.single_mut();
-    let mut direction = 0.0;
-    if keyboard_input.pressed(KeyCode::S) {
-        direction -= 1.0;
-    }
-    if keyboard_input.pressed(KeyCode::W) {
-        direction += 1.0;
-    }
-
-    let new_paddle_position = paddle_transform.translation.y + direction * PADDLE_SPEED * TIME_STEP;
-    let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
-    let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
-
-    paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+        paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+    };
 
 }
 
@@ -428,6 +423,75 @@ fn move_p2_paddle(
     let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
 
     paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
+}
+
+
+// fn ai1(
+//     mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
+//     mut paddle_2: Query<(&mut Velocity, &mut Transform), (With<P2Paddle>, Without<Ball>)>
+// ) {
+//     let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
+//     let (mut p2_velocity, mut p2_transform) = paddle_2.single_mut();
+
+//     if ball_velocity.x < 0.0 && (ball_transform.translation.x + (BALL_SIZE.x/2.0) < ((RIGHT_WALL - LEFT_WALL)/2.0)) {
+
+//         if (ball_transform.translation.y + (BALL_SIZE.x/2.0)) != (p2_transform.translation.y + (PADDLE_SIZE.y / 2.0)) {
+
+//             let time_til_collision = ((PADDLE_PADDING + PADDLE_SIZE.x) - ball_transform.translation.x) / ball_velocity.x;
+
+//             let distance_wanted = (p2_transform.translation.y + (PADDLE_SIZE.y/2.0)) - (ball_transform.translation.y + (BALL_SIZE.x/2.0));
+
+//             let velocity_wanted = -distance_wanted / time_til_collision;
+//             if velocity_wanted > PADDLE_SPEED {
+//                 p2_velocity.y = PADDLE_SPEED;
+//             } else if velocity_wanted < -PADDLE_SPEED  {
+//                 p2_velocity.y = -PADDLE_SPEED;
+//             } else {
+//                 p2_velocity.y = velocity_wanted;
+//             }
+//         } else {
+//             p2_velocity.y = 0.0;
+//         }
+//     } else {
+//         p2_velocity.y = 0.0;
+//     }
+// }
+
+fn ai2(
+    mut ball_query: Query<(&Velocity, &Transform), With<Ball>>,
+    mut paddle_2: Query<(&mut Velocity, &Transform), (With<P2Paddle>, Without<Ball>)>
+) {
+    let (ball_velocity, ball_transform) = ball_query.single_mut();
+    let (mut p2_velocity, p2_transform) = paddle_2.single_mut();
+
+
+    if (ball_velocity.x > 0.0) && ((ball_transform.translation.x + (BALL_SIZE.x/2.0)) > ((LEFT_WALL - RIGHT_WALL)/2.0)) {
+        if (ball_transform.translation.y + (BALL_SIZE.x/2.0)) != (p2_transform.translation.y + (PADDLE_SIZE.y / 2.0)) {
+
+            let time_til_collision = (((RIGHT_WALL - LEFT_WALL)/2.0 - PADDLE_PADDING - PADDLE_SIZE.x) - ball_transform.translation.x) / ball_velocity.x;
+
+            let distance_wanted = (p2_transform.translation.y ) - (ball_transform.translation.y + (BALL_SIZE.x/2.0));
+
+            let velocity_wanted = -distance_wanted / time_til_collision;
+
+            let top_bound = TOP_WALL - PADDLE_SIZE.y + PADDLE_PADDING;
+            let bottom_bound = BOTTOM_WALL + PADDLE_SIZE.y - PADDLE_PADDING;
+
+            // TODO: Condition so it can't clip top and bottom walls
+            if velocity_wanted > 800.0 {
+                p2_velocity.y = 800.0
+            } else if velocity_wanted < -800.0  {
+                p2_velocity.y = -800.0
+            } else {
+                p2_velocity.y = velocity_wanted;
+            }
+
+        } else {
+            p2_velocity.y = 0.0;
+        }
+    } else {
+        p2_velocity.y = 0.0;
+    }
 }
 
 fn apply_velocity(
@@ -544,42 +608,49 @@ fn check_for_collisions(
                 thingies.score_cooldown.reset();
             }
 
+            let mut rng = rand::thread_rng();
             if maybe_p1_paddle.is_some() {
-                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
-                let normalized_relative_intersection_y = relative_intersect_y/60.0;
-                let bounce_angle = normalized_relative_intersection_y * ((75.0*PI)/12.0).to_radians();
-
-                ball_velocity.y = BALL_SPEED * (-bounce_angle.sin());
-                ball_velocity.x = BALL_SPEED * bounce_angle.cos();
                 scoreboard.fjongs += 1;
+                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
+                let normalized_relative_intersection_y = relative_intersect_y/(PADDLE_SIZE.y / 2.0);
+                let bounce_angle = normalized_relative_intersection_y * (PI/2.0 - (PI/4.0));
+
+                ball_velocity.x = BALL_SPEED * bounce_angle.cos() + (scoreboard.fjongs as f32 * 4.0);
+                ball_velocity.y = BALL_SPEED * (-bounce_angle.sin()) + (scoreboard.fjongs as f32 * 4.0);
             }
 
             if maybe_p2_paddle.is_some() {
-                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
-                let normalized_relative_intersection_y = relative_intersect_y/60.0;
-                let bounce_angle = normalized_relative_intersection_y * ((75.0*PI)/12.0).to_radians();
-
-                ball_velocity.y = BALL_SPEED * (-bounce_angle.sin());
-                ball_velocity.x = -(BALL_SPEED * bounce_angle.cos());
                 scoreboard.fjongs += 1;
+                let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
+                let normalized_relative_intersection_y = relative_intersect_y/(PADDLE_SIZE.y / 2.0);
+                let bounce_angle = normalized_relative_intersection_y * (PI/2.0 - (PI/4.0));
+
+                ball_velocity.x = ((BALL_SPEED * bounce_angle.cos()) + (scoreboard.fjongs as f32 * 4.0)) * -1.0;
+                ball_velocity.y = ((BALL_SPEED * bounce_angle.sin()) + (scoreboard.fjongs as f32 * 4.0)) * -1.0;
             }
 
 
-            if ball_velocity.x > 0.0 {
-                ball_velocity.x =
-                    (ball_velocity.x * (scoreboard.fjongs as f32) / 4.0).clamp(ball_velocity.x, 1000.0);
-            } else {
-                ball_velocity.x = ((ball_velocity.x) * (scoreboard.fjongs as f32) / 4.0)
-                    .clamp(-1000.0, ball_velocity.x);
-            }
+            // if ball_velocity.x > 0.0 {
+            //     if ball_velocity.x > 1000.0 {
+            //         ball_velocity.x = 1000.0;
+            //     }
+            // } else {
+            //     if ball_velocity.x < -1000.0 {
+            //         ball_velocity.x = -1000.0;
+            //     }
+            // }
 
-            if ball_velocity.y > 0.0 {
-                ball_velocity.y =
-                    (ball_velocity.y * (scoreboard.fjongs as f32) / 4.0).clamp(ball_velocity.y, 200.0);
-            } else {
-                ball_velocity.y = ((ball_velocity.y) * (scoreboard.fjongs as f32) / 4.0)
-                    .clamp(-200.0, ball_velocity.y);
-            }
+            // if ball_velocity.y > 0.0 {
+            //     if ball_velocity.y > 200.0 {
+            //         ball_velocity.y = 200.0;
+            //     }
+            // } else {
+            //     if ball_velocity.y < -200.0 {
+            //         ball_velocity.y = -200.0;
+            //     }
+            //     println!("ballvy {}", ball_velocity.y);
+            // }
         }
     }
 }
+
