@@ -1,5 +1,4 @@
 use std::f32::consts::PI;
-use rand::Rng;
 
 use bevy::{
     core::FixedTimestep,
@@ -425,38 +424,6 @@ fn move_p2_paddle(
     paddle_transform.translation.y = new_paddle_position.clamp(bottom_bound, top_bound);
 }
 
-
-// fn ai1(
-//     mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
-//     mut paddle_2: Query<(&mut Velocity, &mut Transform), (With<P2Paddle>, Without<Ball>)>
-// ) {
-//     let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
-//     let (mut p2_velocity, mut p2_transform) = paddle_2.single_mut();
-
-//     if ball_velocity.x < 0.0 && (ball_transform.translation.x + (BALL_SIZE.x/2.0) < ((RIGHT_WALL - LEFT_WALL)/2.0)) {
-
-//         if (ball_transform.translation.y + (BALL_SIZE.x/2.0)) != (p2_transform.translation.y + (PADDLE_SIZE.y / 2.0)) {
-
-//             let time_til_collision = ((PADDLE_PADDING + PADDLE_SIZE.x) - ball_transform.translation.x) / ball_velocity.x;
-
-//             let distance_wanted = (p2_transform.translation.y + (PADDLE_SIZE.y/2.0)) - (ball_transform.translation.y + (BALL_SIZE.x/2.0));
-
-//             let velocity_wanted = -distance_wanted / time_til_collision;
-//             if velocity_wanted > PADDLE_SPEED {
-//                 p2_velocity.y = PADDLE_SPEED;
-//             } else if velocity_wanted < -PADDLE_SPEED  {
-//                 p2_velocity.y = -PADDLE_SPEED;
-//             } else {
-//                 p2_velocity.y = velocity_wanted;
-//             }
-//         } else {
-//             p2_velocity.y = 0.0;
-//         }
-//     } else {
-//         p2_velocity.y = 0.0;
-//     }
-// }
-
 fn ai2(
     mut ball_query: Query<(&Velocity, &Transform), With<Ball>>,
     mut paddle_2: Query<(&mut Velocity, &Transform), (With<P2Paddle>, Without<Ball>)>
@@ -608,7 +575,6 @@ fn check_for_collisions(
                 thingies.score_cooldown.reset();
             }
 
-            let mut rng = rand::thread_rng();
             if maybe_p1_paddle.is_some() {
                 scoreboard.fjongs += 1;
                 let relative_intersect_y = transform.translation.y - ball_transform.translation.y;
@@ -629,27 +595,6 @@ fn check_for_collisions(
                 ball_velocity.y = ((BALL_SPEED * bounce_angle.sin()) + (scoreboard.fjongs as f32 * 4.0)) * -1.0;
             }
 
-
-            // if ball_velocity.x > 0.0 {
-            //     if ball_velocity.x > 1000.0 {
-            //         ball_velocity.x = 1000.0;
-            //     }
-            // } else {
-            //     if ball_velocity.x < -1000.0 {
-            //         ball_velocity.x = -1000.0;
-            //     }
-            // }
-
-            // if ball_velocity.y > 0.0 {
-            //     if ball_velocity.y > 200.0 {
-            //         ball_velocity.y = 200.0;
-            //     }
-            // } else {
-            //     if ball_velocity.y < -200.0 {
-            //         ball_velocity.y = -200.0;
-            //     }
-            //     println!("ballvy {}", ball_velocity.y);
-            // }
         }
     }
 }
